@@ -53,6 +53,8 @@ Every request sends an explicit `max_tokens`. The API holds that budget against 
 
 Trial accounts allow 1 request at a time and cap output at 4096 tokens per request, which is tight for agent mode. See [Rate limits and trial](https://abliteratedllm.dev/docs/rate-limits).
 
+On a trial account, don't set an AbliteratedLLM model as `chat.utilityModel` or `chat.utilitySmallModel`: VS Code's background tasks (titles, summaries, commit messages) would then run alongside your chat and fail with a rate-limit error.
+
 ## Data and privacy
 
 This section describes what the extension sends, when, where it goes, and how long it is kept.

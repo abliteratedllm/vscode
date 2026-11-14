@@ -9,11 +9,11 @@ const delta = (value: object, finish: string | null = null): string =>
 const USAGE = data({ choices: [], usage: { prompt_tokens: 31, completion_tokens: 212, total_tokens: 243 } });
 
 /** Feeds `body` to a parser in pieces of `size` characters and collects every event. */
-function parse(body: string, size = body.length): StreamEvent[] {
+function parse(body: string, size = body.length, events: StreamEvent[] = []): StreamEvent[] {
   const parser = new ChatStreamParser();
-  const events: StreamEvent[] = [];
-  for (let i = 0; i < body.length; i += size) events.push(...parser.push(body.slice(i, i + size)));
-  events.push(...parser.end());
+  const emit = (event: StreamEvent) => events.push(event);
+  for (let i = 0; i < body.length; i += size) parser.push(body.slice(i, i + size), emit);
+  parser.end(emit);
   return events;
 }
 
@@ -84,30 +84,35 @@ test("throws the error object a stream carries after the 200 status", () => {
   const body =
     delta({ content: "Partial" }) +
     data({ error: { type: "api_error", code: "upstream_error", message: "The model backend failed." } });
-  const parser = new ChatStreamParser();
+  const events: StreamEvent[] = [];
   assert.throws(
-    () => parser.push(body),
+    () => parse(body, body.length, events),
     (error: unknown) =>
       error instanceof ApiError &&
       error.code === "upstream_error" &&
       error.message.includes("The model backend failed."),
   );
+  // The text before the error, in the same network chunk, still reached the caller.
+  assert.deepEqual(events, [{ type: "text", text: "Partial" }]);
 });
 
 test("throws a plain JSON error body that is not SSE", () => {
-  const parser = new ChatStreamParser();
   assert.throws(
-    () =>
-      parser.push(
-        '\n\n{"error":{"type":"api_error","code":"upstream_error","message":"Time limit reached."}}\n',
-      ),
+    () => parse('\n\n{"error":{"type":"api_error","code":"upstream_error","message":"Time limit reached."}}\n'),
     (error: unknown) => error instanceof ApiError && error.code === "upstream_error",
   );
 });
 
-test("explains a response cut at the output budget", () => {
-  const body = delta({ content: "The answer is" }) + delta({}, "length");
-  assert.throws(() => parse(body), /abliteratedllm\.maxOutputTokens/);
+test("explains a response cut at the output budget, after passing on the text before it", () => {
+  for (const body of [
+    delta({ content: "The answer is" }) + delta({}, "length"),
+    // Text and the finish reason in one chunk, with no trailing newline.
+    `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: "The answer is" }, finish_reason: "length" }] })}`,
+  ]) {
+    const events: StreamEvent[] = [];
+    assert.throws(() => parse(body, body.length, events), /abliteratedllm\.maxOutputTokens/);
+    assert.deepEqual(events, [{ type: "text", text: "The answer is" }]);
+  }
 });
 
 test("throws when the stream ends before the model finished", () => {

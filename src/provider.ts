@@ -161,20 +161,17 @@ export class AbliteratedLLMProvider implements vscode.LanguageModelChatProvider<
       if (response.body === null) throw new Error("AbliteratedLLM: the API sent an empty response.");
       const parser = new ChatStreamParser();
       const decoder = new TextDecoder();
-      const report = (events: StreamEvent[]): void => {
-        for (const event of events) {
-          progress.report(
-            event.type === "text"
-              ? new vscode.LanguageModelTextPart(event.text)
-              : new vscode.LanguageModelToolCallPart(event.callId, event.name, event.input),
-          );
-        }
-      };
+      const report = (event: StreamEvent): void =>
+        progress.report(
+          event.type === "text"
+            ? new vscode.LanguageModelTextPart(event.text)
+            : new vscode.LanguageModelToolCallPart(event.callId, event.name, event.input),
+        );
       for await (const chunk of response.body) {
-        report(parser.push(decoder.decode(chunk, { stream: true })));
+        parser.push(decoder.decode(chunk, { stream: true }), report);
       }
-      report(parser.push(decoder.decode()));
-      report(parser.end());
+      parser.push(decoder.decode(), report);
+      parser.end(report);
     } catch (error) {
       // A cancelled request ends quietly; VS Code already knows it stopped.
       if (token.isCancellationRequested) return;

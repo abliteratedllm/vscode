@@ -4,7 +4,6 @@ import type * as vscode from "vscode";
 import { buildChatRequest, estimateTokens, toChatMessages } from "../src/convert.ts";
 import type { AbliteratedModel } from "../src/models.ts";
 import {
-  LanguageModelDataPart,
   LanguageModelTextPart,
   LanguageModelToolCallPart,
   LanguageModelToolResultPart,
@@ -18,6 +17,9 @@ const message = (role: number, ...content: unknown[]): vscode.LanguageModelChatR
   ({ role, content, name: undefined }) as unknown as vscode.LanguageModelChatRequestMessage;
 
 const text = (value: string) => new LanguageModelTextPart(value);
+// LanguageModelDataPart is only in the stable API from VS Code 1.106, so convert.ts matches data
+// parts by shape; plain objects stand in for them here.
+const dataPart = (data: Uint8Array, mimeType: string) => ({ data, mimeType });
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 const PNG_URL = "data:image/png;base64,iVBORw==";
 
@@ -100,7 +102,7 @@ test("keeps assistant text next to its tool calls", () => {
 });
 
 test("sends images as data URLs to vision models and a note to the others", () => {
-  const input = [message(USER, text("What is this?"), new LanguageModelDataPart(PNG, "image/png"))];
+  const input = [message(USER, text("What is this?"), dataPart(PNG, "image/png"))];
   assert.deepEqual(toChatMessages(input, true), [
     {
       role: "user",
@@ -121,7 +123,7 @@ test("moves images from a tool result into the user message after the tool messa
       message(ASSISTANT, new LanguageModelToolCallPart("shot", "screenshot", {})),
       message(
         USER,
-        new LanguageModelToolResultPart("shot", [text("Captured."), new LanguageModelDataPart(PNG, "image/png")]),
+        new LanguageModelToolResultPart("shot", [text("Captured."), dataPart(PNG, "image/png")]),
       ),
     ],
     true,
@@ -139,8 +141,8 @@ test("decodes JSON and text data parts and drops markers such as cache_control",
       message(
         USER,
         text("Context: "),
-        new LanguageModelDataPart(encode('{"a":1}'), "application/json"),
-        new LanguageModelDataPart(encode("ephemeral"), "cache_control"),
+        dataPart(encode('{"a":1}'), "application/json"),
+        dataPart(encode("ephemeral"), "cache_control"),
       ),
     ],
     true,
@@ -227,7 +229,7 @@ test("takes temperature, top_p and a lower max_tokens from modelOptions", () => 
 test("estimates tokens at four characters each, plus a flat amount per image", () => {
   assert.equal(estimateTokens("12345678"), 2);
   assert.equal(estimateTokens("123456789"), 3);
-  const withImage = message(USER, text("12345678"), new LanguageModelDataPart(PNG, "image/png"));
+  const withImage = message(USER, text("12345678"), dataPart(PNG, "image/png"));
   assert.equal(estimateTokens(withImage), 2 + 1000);
   const toolCall = message(ASSISTANT, new LanguageModelToolCallPart("c", "abcd", {}));
   assert.equal(estimateTokens(toolCall), Math.ceil(("abcd".length + "{}".length) / 4));

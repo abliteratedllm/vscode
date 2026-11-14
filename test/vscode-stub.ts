@@ -35,15 +35,5 @@ export class LanguageModelPromptTsxPart {
   }
 }
 
-/** Stable only from VS Code 1.106; convert.ts matches it by shape. */
-export class LanguageModelDataPart {
-  data: Uint8Array;
-  mimeType: string;
-  constructor(data: Uint8Array, mimeType: string) {
-    this.data = data;
-    this.mimeType = mimeType;
-  }
-}
-
 export const LanguageModelChatMessageRole = { User: 1, Assistant: 2 } as const;
 export const LanguageModelChatToolMode = { Auto: 1, Required: 2 } as const;

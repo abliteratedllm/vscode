@@ -16,8 +16,9 @@ interface PendingToolCall {
 }
 
 /**
- * Feed it the body text as it arrives (`push`), then call `end` once the body is done. Both return
- * the events that became complete. Text is passed on as it streams; a tool call is passed on once
+ * Feed it the body text as it arrives (`push`), then call `end` once the body is done. Both hand
+ * each event to `emit` as soon as it is complete, so an error later in the same chunk does not
+ * lose output that came before it. Text is passed on as it streams; a tool call is passed on once
  * its arguments are complete, when the choice finishes. Reasoning (`reasoning_content`) is not
  * passed on: VS Code's stable API has no part for it.
  *
@@ -29,32 +30,29 @@ export class ChatStreamParser {
   private readonly toolCalls = new Map<number, PendingToolCall>();
   private finishReason: string | undefined;
 
-  push(chunk: string): StreamEvent[] {
+  push(chunk: string, emit: (event: StreamEvent) => void): void {
     this.buffer += chunk;
-    const events: StreamEvent[] = [];
     let newline = this.buffer.indexOf("\n");
     while (newline !== -1) {
       const line = this.buffer.slice(0, newline).replace(/\r$/, "");
       this.buffer = this.buffer.slice(newline + 1);
-      this.parseLine(line, events);
+      this.parseLine(line, emit);
       newline = this.buffer.indexOf("\n");
     }
-    return events;
   }
 
-  end(): StreamEvent[] {
-    const events: StreamEvent[] = [];
+  end(emit: (event: StreamEvent) => void): void {
     if (this.buffer !== "") {
-      this.parseLine(this.buffer.replace(/\r$/, ""), events);
+      const line = this.buffer.replace(/\r$/, "");
       this.buffer = "";
+      this.parseLine(line, emit);
     }
     if (this.finishReason === undefined) {
       throw new Error("AbliteratedLLM: the response ended before the model finished. Try again.");
     }
-    return events;
   }
 
-  private parseLine(line: string, events: StreamEvent[]): void {
+  private parseLine(line: string, emit: (event: StreamEvent) => void): void {
     // Blank lines end an event, ": ping" is a keep-alive comment, and event/id/retry fields carry
     // nothing this parser needs.
     if (line === "" || line.startsWith(":")) return;
@@ -74,13 +72,13 @@ export class ChatStreamParser {
     const delta = isRecord(choice.delta) ? choice.delta : {};
 
     if (typeof delta.content === "string" && delta.content !== "") {
-      events.push({ type: "text", text: delta.content });
+      emit({ type: "text", text: delta.content });
     }
     if (Array.isArray(delta.tool_calls)) {
       delta.tool_calls.forEach((call: unknown, position: number) => this.addToolCallDelta(call, position));
     }
     if (typeof choice.finish_reason === "string") {
-      this.finish(choice.finish_reason, events);
+      this.finish(choice.finish_reason, emit);
     }
   }
 
@@ -99,7 +97,7 @@ export class ChatStreamParser {
     if (typeof fn.arguments === "string") pending.args += fn.arguments;
   }
 
-  private finish(reason: string, events: StreamEvent[]): void {
+  private finish(reason: string, emit: (event: StreamEvent) => void): void {
     this.finishReason = reason;
     if (reason === "length") {
       throw new Error(
@@ -120,7 +118,7 @@ export class ChatStreamParser {
           `AbliteratedLLM: the model sent arguments for tool "${call.name}" that are not a JSON object.`,
         );
       }
-      events.push({
+      emit({
         type: "toolCall",
         callId: call.id !== "" ? call.id : `call_${Date.now().toString(36)}_${index}`,
         name: call.name,
