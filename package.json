@@ -1,0 +1,109 @@
+{
+  "name": "abliteratedllm-vscode",
+  "displayName": "AbliteratedLLM",
+  "description": "AbliteratedLLM models in the VS Code chat model picker. Data use: each chat request you send carries your prompt, attached context, tool data and API key to api.abliteratedllm.dev (Cloudflare, then Fireworks AI in the US); prompts and outputs are not stored, request metadata is kept 30 days. No telemetry. Details in the README.",
+  "version": "0.1.0",
+  "publisher": "abliteratedllm",
+  "license": "MIT",
+  "author": "AbliteratedLLM <support@abliteratedllm.dev>",
+  "icon": "media/icon.png",
+  "homepage": "https://abliteratedllm.dev/docs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abliteratedllm/vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/abliteratedllm/vscode/issues",
+    "email": "support@abliteratedllm.dev"
+  },
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "keywords": [
+    "abliteratedllm",
+    "language model",
+    "chat provider",
+    "byok",
+    "llm"
+  ],
+  "pricing": "Free",
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "abliteratedllm",
+        "displayName": "AbliteratedLLM",
+        "managementCommand": "abliteratedllm.manage"
+      }
+    ],
+    "commands": [
+      {
+        "command": "abliteratedllm.manage",
+        "title": "Manage AbliteratedLLM"
+      },
+      {
+        "command": "abliteratedllm.setApiKey",
+        "title": "Set API Key",
+        "category": "AbliteratedLLM"
+      },
+      {
+        "command": "abliteratedllm.removeApiKey",
+        "title": "Remove API Key",
+        "category": "AbliteratedLLM"
+      },
+      {
+        "command": "abliteratedllm.showBalance",
+        "title": "Show Balance",
+        "category": "AbliteratedLLM"
+      },
+      {
+        "command": "abliteratedllm.refreshModels",
+        "title": "Refresh Models",
+        "category": "AbliteratedLLM"
+      }
+    ],
+    "configuration": {
+      "title": "AbliteratedLLM",
+      "properties": {
+        "abliteratedllm.reasoningEffort": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "enumDescriptions": [
+            "Shortest reasoning before the answer. Fastest and cheapest.",
+            "More reasoning before the answer.",
+            "The most reasoning before the answer. Slowest and most expensive."
+          ],
+          "default": "low",
+          "markdownDescription": "Sent as `reasoning_effort` with every request. Every AbliteratedLLM model reasons before it answers, and reasoning tokens are billed as output tokens."
+        },
+        "abliteratedllm.maxOutputTokens": {
+          "type": "integer",
+          "default": 8192,
+          "minimum": 256,
+          "markdownDescription": "Output budget per request, sent as `max_tokens` and lowered to each model's own limit. It covers reasoning tokens as well as the answer. Each request holds this budget against your balance and the key's spend caps until it finishes. Trial accounts are capped at 4096."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p . && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./test/vscode-hook.mjs --test \"test/**/*.test.ts\"",
+    "vscode:prepublish": "tsc -p . && node esbuild.mjs --production"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.104.0",
+    "@vscode/vsce": "4.1.1",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

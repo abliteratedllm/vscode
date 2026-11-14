@@ -1,0 +1,32 @@
+# Publishes a GitHub release to the Visual Studio Marketplace with trusted publishing (OIDC), and
+# to Open VSX when the OVSX_PAT secret is set. The Marketplace publisher needs a trusted-publishing
+# policy for this repository and workflow before the first run.
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx @vscode/vsce package --out extension.vsix
+      - run: npx @vscode/vsce publish --oidc --packagePath extension.vsix
+      - if: env.OVSX_PAT != ''
+        run: npx --yes ovsx publish extension.vsix --pat "$OVSX_PAT"
